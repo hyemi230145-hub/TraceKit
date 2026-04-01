@@ -14,61 +14,105 @@
 </head>
 <body>
 
-  <!-- ── HEADER ── -->
-  <header class="header" id="header">
-    <div class="logo">
-      <span class="logo-dot"></span>TraceKit
-    </div>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="logo"><span class="logo-dot"></span>TraceKit</div>
     <div class="header-right" id="headerRight">
-      <button class="btn-primary" id="startBtn" onclick="App.startTrip()">Start Trip</button>
+      <button class="btn-primary" onclick="App.startTrip()">Start Trip</button>
     </div>
   </header>
 
-  <!-- ── MAIN LAYOUT ── -->
-  <main class="layout">
+  <!-- TABS -->
+  <nav class="tabs">
+    <button class="tab active" id="tabMap" onclick="App.switchTab('map')">🗺 Map</button>
+    <button class="tab" id="tabGallery" onclick="App.switchTab('gallery')">📷 Gallery</button>
+    <button class="tab" id="tabSummary" onclick="App.switchTab('summary')">🏁 Summary</button>
+  </nav>
 
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="sidebar-top">
-        <div class="sidebar-meta">
-          <span class="label">Journey Log</span>
-          <span class="photo-count" id="photoCount">0 photos</span>
-        </div>
-        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
-          <div class="upload-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
+  <!-- MAP VIEW -->
+  <div class="view" id="viewMap">
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-top">
+          <div class="sidebar-meta">
+            <span class="label">Journey Log</span>
+            <span class="photo-count" id="photoCount">0 photos</span>
           </div>
-          <div class="upload-text">
-            <strong>Upload photos</strong>
-            <span>Click or drag files here</span>
+          <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </div>
+            <div class="upload-text">
+              <strong>Upload photos</strong>
+              <span>Click or drag files here</span>
+            </div>
+          </div>
+          <input type="file" id="fileInput" accept="image/*" multiple onchange="App.handleFiles(this.files)" />
+        </div>
+        <div class="timeline" id="timeline">
+          <div class="empty-state">Start your trip and upload photos — your route will appear here.</div>
+        </div>
+      </aside>
+      <section class="map-wrap">
+        <div id="map"></div>
+        <div class="map-badge" id="mapBadge">No photos yet</div>
+      </section>
+    </div>
+  </div>
+
+  <!-- GALLERY VIEW -->
+  <div class="view hidden" id="viewGallery">
+    <div class="gallery-wrap">
+      <div class="gallery-empty" id="galleryEmpty">No photos yet — upload some during your trip!</div>
+      <div class="gallery-grid" id="galleryGrid"></div>
+    </div>
+  </div>
+
+  <!-- SUMMARY VIEW -->
+  <div class="view hidden" id="viewSummary">
+    <div class="summary-wrap">
+      <div class="summary-empty" id="summaryEmpty">
+        <p>End your trip to see the full summary.</p>
+      </div>
+      <div class="summary-card hidden" id="summaryCard">
+        <div class="summary-header">
+          <div class="summary-title">Trip Complete</div>
+          <div class="summary-date" id="summaryDate"></div>
+        </div>
+        <div class="summary-stats">
+          <div class="stat-box">
+            <div class="stat-value" id="statDuration">—</div>
+            <div class="stat-label">Duration</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value" id="statDistance">—</div>
+            <div class="stat-label">Distance</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value" id="statPhotos">—</div>
+            <div class="stat-label">Photos</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value" id="statPlaces">—</div>
+            <div class="stat-label">Places</div>
           </div>
         </div>
-        <input type="file" id="fileInput" accept="image/*" multiple onchange="App.handleFiles(this.files)" />
-      </div>
-
-      <div class="timeline" id="timeline">
-        <div class="empty-state" id="emptyState">
-          <p>Start your trip and upload photos — your route will appear here.</p>
+        <div class="summary-map-wrap">
+          <div id="summaryMap"></div>
         </div>
+        <div class="summary-timeline" id="summaryTimeline"></div>
       </div>
-    </aside>
+    </div>
+  </div>
 
-    <!-- Map -->
-    <section class="map-wrap">
-      <div id="map"></div>
-      <div class="map-badge" id="mapBadge">No photos yet</div>
-    </section>
-
-  </main>
-
-  <!-- ── PHOTO MODAL ── -->
+  <!-- PHOTO MODAL -->
   <div class="overlay" id="overlay">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal">
       <div class="modal-header">
-        <h2 id="modalTitle">Confirm photo details</h2>
-        <button class="modal-close" onclick="App.closeModal()" aria-label="Close">✕</button>
+        <h2>Confirm photo details</h2>
+        <button class="modal-close" onclick="App.closeModal()">✕</button>
       </div>
       <img class="modal-preview" id="modalPreview" src="" alt="Preview" />
       <div class="form-field">
@@ -76,12 +120,20 @@
         <input class="form-input" id="modalTime" type="datetime-local" />
       </div>
       <div class="form-field">
-        <label class="form-label">Location name</label>
-        <input class="form-input" id="modalLocation" type="text" placeholder="e.g. Gyeongbokgung Palace" />
+        <label class="form-label">Address or place name</label>
+        <div class="addr-row">
+          <input class="form-input" id="modalAddress" type="text" placeholder="e.g. 122 Boulevard Longchamp, Marseille" />
+          <button class="btn-search" onclick="App.searchAddress()">Search</button>
+        </div>
         <span class="form-hint" id="locationHint"></span>
+        <div class="addr-suggestions" id="addrSuggestions"></div>
       </div>
       <div class="form-field">
-        <label class="form-label">GPS coordinates</label>
+        <label class="form-label">Location name <span class="optional">(short label for pin)</span></label>
+        <input class="form-input" id="modalLocation" type="text" placeholder="e.g. Palais Longchamp" />
+      </div>
+      <div class="form-field">
+        <label class="form-label">GPS <span class="optional">(auto-filled when you search address)</span></label>
         <div class="coord-row">
           <input class="form-input" id="modalLat" type="number" placeholder="Latitude" step="0.0001" />
           <input class="form-input" id="modalLng" type="number" placeholder="Longitude" step="0.0001" />
@@ -98,8 +150,14 @@
     </div>
   </div>
 
-  <!-- ── NOTIFICATION ── -->
-  <div class="notif" id="notif" role="alert" aria-live="polite">
+  <!-- LIGHTBOX -->
+  <div class="lightbox" id="lightbox" onclick="App.closeLightbox()">
+    <img class="lightbox-img" id="lightboxImg" src="" alt="" />
+    <div class="lightbox-info" id="lightboxInfo"></div>
+  </div>
+
+  <!-- NOTIFICATION -->
+  <div class="notif" id="notif">
     <span class="notif-icon" id="notifIcon"></span>
     <div>
       <div class="notif-title" id="notifTitle"></div>
