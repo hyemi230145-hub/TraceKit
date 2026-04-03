@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TraceKit</title>
-  <meta name="description" content="Travel route journal — capture photos and trace your journey on a map." />
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#1A1714" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -24,9 +23,10 @@
 
   <!-- TABS -->
   <nav class="tabs">
-    <button class="tab active" id="tabMap" onclick="App.switchTab('map')">🗺 Map</button>
-    <button class="tab" id="tabGallery" onclick="App.switchTab('gallery')">📷 Gallery</button>
-    <button class="tab" id="tabSummary" onclick="App.switchTab('summary')">🏁 Summary</button>
+    <button class="tab active" id="tabMap"     onclick="App.switchTab('map')">🗺 Map</button>
+    <button class="tab"        id="tabGallery" onclick="App.switchTab('gallery')">📷 Gallery</button>
+    <button class="tab"        id="tabSummary" onclick="App.switchTab('summary')">🏁 Summary</button>
+    <button class="tab"        id="tabPrint"   onclick="App.switchTab('print')">🖨 Print</button>
   </nav>
 
   <!-- MAP VIEW -->
@@ -44,10 +44,7 @@
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
             </div>
-            <div class="upload-text">
-              <strong>Upload photos</strong>
-              <span>Click or drag files here</span>
-            </div>
+            <div class="upload-text"><strong>Upload photos</strong><span>Click or drag files here</span></div>
           </div>
           <input type="file" id="fileInput" accept="image/*" multiple onchange="App.handleFiles(this.files)" />
         </div>
@@ -73,37 +70,64 @@
   <!-- SUMMARY VIEW -->
   <div class="view hidden" id="viewSummary">
     <div class="summary-wrap">
-      <div class="summary-empty" id="summaryEmpty">
-        <p>End your trip to see the full summary.</p>
-      </div>
+      <div class="summary-empty" id="summaryEmpty"><p>End your trip to see the full summary.</p></div>
       <div class="summary-card hidden" id="summaryCard">
         <div class="summary-header">
           <div class="summary-title">Trip Complete</div>
           <div class="summary-date" id="summaryDate"></div>
         </div>
         <div class="summary-stats">
-          <div class="stat-box">
-            <div class="stat-value" id="statDuration">—</div>
-            <div class="stat-label">Duration</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-value" id="statDistance">—</div>
-            <div class="stat-label">Distance</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-value" id="statPhotos">—</div>
-            <div class="stat-label">Photos</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-value" id="statPlaces">—</div>
-            <div class="stat-label">Places</div>
-          </div>
+          <div class="stat-box"><div class="stat-value" id="statDuration">—</div><div class="stat-label">Duration</div></div>
+          <div class="stat-box"><div class="stat-value" id="statDistance">—</div><div class="stat-label">Distance</div></div>
+          <div class="stat-box"><div class="stat-value" id="statPhotos">—</div><div class="stat-label">Photos</div></div>
+          <div class="stat-box"><div class="stat-value" id="statPlaces">—</div><div class="stat-label">Places</div></div>
         </div>
-        <div class="summary-map-wrap">
-          <div id="summaryMap"></div>
-        </div>
+        <div class="summary-map-wrap"><div id="summaryMap"></div></div>
         <div class="summary-timeline" id="summaryTimeline"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- PRINT VIEW -->
+  <div class="view hidden" id="viewPrint">
+    <div class="print-wrap">
+
+      <div class="print-panel">
+        <div class="print-panel-header">
+          <div>
+            <div class="print-panel-title">Photo Sheet Export</div>
+            <div class="print-panel-sub">10 × 15 cm · 12 images · 2.5 × 5 cm each · 4 × 3 grid</div>
+          </div>
+          <span class="print-sel-count" id="printSelCount">0 / 12 selected</span>
+        </div>
+
+        <div class="print-sel-grid" id="printSelectGrid">
+          <div class="print-empty">No photos yet — upload photos first.</div>
+        </div>
+
+        <div class="print-actions">
+          <div id="printSpinner" class="print-spinner" style="display:none">Generating…</div>
+          <button class="btn-ghost" id="printPreviewBtn" onclick="Printer.updatePreview()">Preview</button>
+          <button class="btn-outline-accent" id="printPNGBtn" onclick="Printer.downloadPNG()">Download PNG</button>
+          <button class="btn-primary" id="printPDFBtn" onclick="Printer.downloadPDF()">Download PDF</button>
+        </div>
+
+        <div class="print-info-box">
+          <strong>📸 Photo kiosk tip</strong><br>
+          Upload the PNG file to any standard 10×15 photo kiosk. Each image is 2.5×5 cm with cut guides — just print and trim!
+        </div>
+      </div>
+
+      <div class="print-preview-panel">
+        <div class="print-preview-label">Preview <span style="font-weight:400;opacity:.6">(scaled)</span></div>
+        <div class="print-preview-frame">
+          <canvas id="printPreviewCanvas" style="width:100%;height:100%;object-fit:contain;display:block;border-radius:4px"></canvas>
+          <div class="print-preview-placeholder" id="printPreviewPlaceholder">
+            Select photos and click Preview
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -159,14 +183,16 @@
   <!-- NOTIFICATION -->
   <div class="notif" id="notif">
     <span class="notif-icon" id="notifIcon"></span>
-    <div>
-      <div class="notif-title" id="notifTitle"></div>
-      <div class="notif-body" id="notifBody"></div>
-    </div>
+    <div><div class="notif-title" id="notifTitle"></div><div class="notif-body" id="notifBody"></div></div>
   </div>
+
+  <!-- PRINT TOAST -->
+  <div class="print-toast" id="printToast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/exifr@7.1.3/dist/lite.umd.js"></script>
+  <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="print.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
