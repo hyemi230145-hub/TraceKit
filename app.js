@@ -1,4 +1,4 @@
-/* ── TraceKit app.js v4 ── */
+/* ── TraceKit app.js v5 ── */
 const App = (() => {
 
   let photos = [];
@@ -11,7 +11,6 @@ const App = (() => {
   let pendingQueue = [];
   let pendingFile = null;
   let activeIndex = -1;
-  let currentTab = 'map';
 
   let map = null;
   let summaryMap = null;
@@ -37,7 +36,6 @@ const App = (() => {
 
   /* ── Tabs ── */
   function switchTab(tab) {
-    currentTab = tab;
     const views = { map:'viewMap', gallery:'viewGallery', summary:'viewSummary', trips:'viewTrips', print:'viewPrint' };
     const tabs  = { map:'tabMap',  gallery:'tabGallery',  summary:'tabSummary',  trips:'tabTrips',  print:'tabPrint' };
     Object.keys(views).forEach(t => {
@@ -52,7 +50,6 @@ const App = (() => {
 
   /* ── Trip start ── */
   function startTrip() {
-    // Clear current session for fresh trip
     photos = [];
     tripActive = true;
     tripSeconds = 0;
@@ -64,7 +61,7 @@ const App = (() => {
     if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
     updateHeaderForActiveTrip();
     renderTimeline(); renderMapPins(); renderGallery(); updateMapBadge();
-    showNotif('🗺️', 'Trip started!', 'You\'ll get a reminder every hour to log a photo.');
+    showNotif('🗺️', 'Trip started!', "You'll get a reminder every hour to log a photo.");
 
     timerInterval = setInterval(() => {
       tripSeconds++;
@@ -78,14 +75,21 @@ const App = (() => {
     }, 1000);
   }
 
-  /* ── Trip end — ask for name ── */
+  /* ── Trip end ── */
   function endTrip() {
+    if (!photos.length) {
+      showNotif('ℹ️', 'No photos', 'Add at least one photo before ending a trip.');
+      return;
+    }
     tripActive = false;
     tripEndTime = new Date();
     clearInterval(timerInterval);
     document.getElementById('headerRight').innerHTML = `<button class="btn-primary" onclick="App.startTrip()">Start Trip</button>`;
-    // Show name modal
-    const suggested = tripStartTime ? tripStartTime.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'My Trip';
+
+    // Pre-fill name modal with date
+    const suggested = tripStartTime
+      ? tripStartTime.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      : 'My Trip';
     document.getElementById('tripNameInput').value = suggested;
     document.getElementById('nameTripOverlay').classList.add('open');
   }
@@ -96,27 +100,28 @@ const App = (() => {
   }
 
   function saveWithoutName() {
-    const name = tripStartTime ? tripStartTime.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'My Trip';
+    const name = tripStartTime
+      ? tripStartTime.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      : 'My Trip';
     finalizeTripSave(name);
   }
 
   function finalizeTripSave(name) {
     document.getElementById('nameTripOverlay').classList.remove('open');
-    if (!photos.length) { showNotif('ℹ️', 'No photos', 'Add photos before ending a trip.'); return; }
 
     const trip = {
-      id: Date.now(),
+      id: String(Date.now()),
       name,
-      startTime: tripStartTime?.toISOString(),
-      endTime: tripEndTime?.toISOString(),
-      durationMs: tripEndTime - tripStartTime,
+      startTime: tripStartTime ? tripStartTime.toISOString() : null,
+      endTime:   tripEndTime   ? tripEndTime.toISOString()   : null,
+      durationMs: tripEndTime && tripStartTime ? (tripEndTime - tripStartTime) : 0,
       distance: calcDistance(),
-      photos: JSON.parse(JSON.stringify(photos)), // deep copy
+      photos: JSON.parse(JSON.stringify(photos)),
     };
 
     TripHistory.saveTrip(trip);
     saveCurrentTrip();
-    showNotif('✅', 'Trip saved!', `"${name}" has been saved to My Trips.`);
+    showNotif('✅', 'Trip saved!', `"${name}" added to My Trips.`);
     switchTab('trips');
   }
 
@@ -134,7 +139,10 @@ const App = (() => {
     document.getElementById('locationHint').textContent = 'Searching…';
     document.getElementById('addrSuggestions').innerHTML = '';
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=4`, { headers: { 'Accept-Language': 'en' } });
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=4`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
       const data = await res.json();
       if (!data.length) { document.getElementById('locationHint').textContent = '⚠️ No results. Try a different address.'; return; }
       document.getElementById('locationHint').textContent = '';
@@ -150,7 +158,8 @@ const App = (() => {
     const r = data[i];
     document.getElementById('modalLat').value = parseFloat(r.lat).toFixed(6);
     document.getElementById('modalLng').value = parseFloat(r.lon).toFixed(6);
-    if (!document.getElementById('modalLocation').value) document.getElementById('modalLocation').value = r.display_name.split(',')[0].trim();
+    if (!document.getElementById('modalLocation').value)
+      document.getElementById('modalLocation').value = r.display_name.split(',')[0].trim();
     document.getElementById('locationHint').textContent = '📍 Location set!';
     document.getElementById('addrSuggestions').innerHTML = '';
   }
@@ -186,7 +195,7 @@ const App = (() => {
       } else {
         document.getElementById('modalLat').value = '';
         document.getElementById('modalLng').value = '';
-        document.getElementById('locationHint').textContent = '📍 No GPS — search an address above.';
+        document.getElementById('locationHint').textContent = '📍 No GPS found — search an address above.';
       }
       document.getElementById('overlay').classList.add('open');
     };
@@ -194,16 +203,24 @@ const App = (() => {
     document.getElementById('fileInput').value = '';
   }
 
-  function closeModal() { document.getElementById('overlay').classList.remove('open'); pendingFile = null; pendingQueue = []; }
+  function closeModal() {
+    document.getElementById('overlay').classList.remove('open');
+    pendingFile = null; pendingQueue = [];
+  }
 
   function savePhoto() {
-    const src = document.getElementById('modalPreview').src;
-    const time = document.getElementById('modalTime').value;
-    const location = document.getElementById('modalLocation').value.trim() || document.getElementById('modalAddress').value.trim() || 'Unknown location';
-    const lat = parseFloat(document.getElementById('modalLat').value);
-    const lng = parseFloat(document.getElementById('modalLng').value);
+    const src      = document.getElementById('modalPreview').src;
+    const time     = document.getElementById('modalTime').value;
+    const location = document.getElementById('modalLocation').value.trim()
+                  || document.getElementById('modalAddress').value.trim()
+                  || 'Unknown location';
+    const lat  = parseFloat(document.getElementById('modalLat').value);
+    const lng  = parseFloat(document.getElementById('modalLng').value);
     const memo = document.getElementById('modalMemo').value.trim();
-    if (!lat || !lng || isNaN(lat) || isNaN(lng)) { document.getElementById('locationHint').textContent = '⚠️ Please search an address or enter coordinates.'; return; }
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+      document.getElementById('locationHint').textContent = '⚠️ Please search an address or enter coordinates.';
+      return;
+    }
     photos.push({ id: Date.now(), src, time, location, lat, lng, memo });
     photos.sort((a, b) => a.time.localeCompare(b.time));
     saveCurrentTrip();
@@ -218,7 +235,10 @@ const App = (() => {
   function renderTimeline() {
     const el = document.getElementById('timeline');
     document.getElementById('photoCount').textContent = `${photos.length} photo${photos.length !== 1 ? 's' : ''}`;
-    if (!photos.length) { el.innerHTML = '<div class="empty-state">Start your trip and upload photos — your route will appear here.</div>'; return; }
+    if (!photos.length) {
+      el.innerHTML = '<div class="empty-state">Start your trip and upload photos — your route will appear here.</div>';
+      return;
+    }
     el.innerHTML = photos.map((p, i) => `
       <div class="tl-item${activeIndex === i ? ' active' : ''}" onclick="App.selectPhoto(${i})">
         <div class="tl-connector"><div class="tl-dot"></div><div class="tl-line"></div></div>
@@ -238,22 +258,32 @@ const App = (() => {
     if (!photos.length) return;
     routeLine = L.polyline(photos.map(p => [p.lat, p.lng]), { color: '#C8602A', weight: 3, opacity: .75, dashArray: '8,6' }).addTo(map);
     photos.forEach((p, i) => {
-      const icon = L.divIcon({ html: `<div class="map-pin-wrap"><div style="position:relative;display:inline-block"><div class="map-pin-bubble"><img src="${p.src}" alt=""/></div><div class="map-pin-num">${i+1}</div></div><div class="map-pin-tail"></div></div>`, className: '', iconSize: [52,64], iconAnchor: [26,64], popupAnchor: [0,-66] });
+      const icon = L.divIcon({
+        html: `<div class="map-pin-wrap"><div style="position:relative;display:inline-block"><div class="map-pin-bubble"><img src="${p.src}" alt=""/></div><div class="map-pin-num">${i+1}</div></div><div class="map-pin-tail"></div></div>`,
+        className: '', iconSize: [52,64], iconAnchor: [26,64], popupAnchor: [0,-66]
+      });
       const marker = L.marker([p.lat, p.lng], { icon }).addTo(map)
         .bindPopup(`<img class="popup-img" src="${p.src}"/><div class="popup-inner"><div class="popup-loc">${i+1}. ${p.location}</div><div class="popup-time">${formatTime(p.time)}</div>${p.memo ? `<div class="popup-memo">${p.memo}</div>` : ''}</div>`, { maxWidth: 220 });
       marker.on('click', () => selectPhoto(i));
       markers.push(marker);
     });
-    photos.length === 1 ? map.setView([photos[0].lat, photos[0].lng], 15) : map.fitBounds(routeLine.getBounds(), { padding: [60,60] });
+    photos.length === 1
+      ? map.setView([photos[0].lat, photos[0].lng], 15)
+      : map.fitBounds(routeLine.getBounds(), { padding: [60,60] });
   }
 
   function selectPhoto(i) {
     activeIndex = i; renderTimeline(); markers[i]?.openPopup(); map.panTo([photos[i].lat, photos[i].lng]);
-    setTimeout(() => { const items = document.querySelectorAll('.tl-item'); if (items[i]) items[i].scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 100);
+    setTimeout(() => {
+      const items = document.querySelectorAll('.tl-item');
+      if (items[i]) items[i].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
   }
 
   function updateMapBadge() {
-    document.getElementById('mapBadge').textContent = photos.length ? `📍 ${photos.length} location${photos.length !== 1 ? 's' : ''} · Route connected` : 'No photos yet';
+    document.getElementById('mapBadge').textContent = photos.length
+      ? `📍 ${photos.length} location${photos.length !== 1 ? 's' : ''} · Route connected`
+      : 'No photos yet';
   }
 
   /* ── Gallery ── */
@@ -290,7 +320,7 @@ const App = (() => {
     document.getElementById('statDistance').textContent = calcDistance() + ' km';
     document.getElementById('statPhotos').textContent = photos.length;
     document.getElementById('statPlaces').textContent = photos.length;
-    document.getElementById('summaryDate').textContent = tripStartTime?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) ?? '';
+    document.getElementById('summaryDate').textContent = tripStartTime?.toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }) ?? '';
     if (!summaryMap) {
       summaryMap = L.map('summaryMap', { zoomControl: false, dragging: false, scrollWheelZoom: false }).setView([photos[0].lat, photos[0].lng], 12);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(summaryMap);
@@ -306,7 +336,7 @@ const App = (() => {
       </div>`).join('');
   }
 
-  /* ── My Trips list ── */
+  /* ── My Trips ── */
   function renderTripsList() {
     const trips = TripHistory.getAll();
     const empty = document.getElementById('tripsEmpty');
@@ -348,7 +378,7 @@ const App = (() => {
   }
 
   function viewTrip(id) {
-    const trip = TripHistory.getAll().find(t => t.id == id);
+    const trip = TripHistory.getAll().find(t => String(t.id) === String(id));
     if (!trip) return;
     document.getElementById('tripDetailTitle').textContent = trip.name;
     const date = trip.startTime ? new Date(trip.startTime).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }) : '';
@@ -361,7 +391,6 @@ const App = (() => {
       <div class="td-stat"><div class="td-stat-val">${trip.photos.length}</div><div class="td-stat-lbl">Photos</div></div>`;
     document.getElementById('tripDetailPhotos').innerHTML = trip.photos.map(p => `<div class="td-photo"><img src="${p.src}" alt="${p.location}"/></div>`).join('');
     document.getElementById('tripDetailOverlay').classList.add('open');
-    // Init detail map
     setTimeout(() => {
       if (!tripDetailMap) {
         tripDetailMap = L.map('tripDetailMap', { zoomControl: false, dragging: true, scrollWheelZoom: false }).setView([trip.photos[0].lat, trip.photos[0].lng], 12);
@@ -394,11 +423,15 @@ const App = (() => {
   /* ── Print panel ── */
   function renderPrintPanel() {
     const grid = document.getElementById('printSelectGrid');
-    if (!photos.length) { grid.innerHTML = '<div class="print-empty">No photos yet — upload photos first.</div>'; document.getElementById('printSelCount').textContent = '0 / 12 selected'; return; }
+    if (!photos.length) {
+      grid.innerHTML = '<div class="print-empty">No photos yet — upload photos first.</div>';
+      document.getElementById('printSelCount').textContent = '0 / 12 selected';
+      return;
+    }
     Printer.open(photos);
   }
 
-  /* ── Storage (current in-progress trip) ── */
+  /* ── Storage ── */
   function saveCurrentTrip() {
     try {
       localStorage.setItem('tracekit_photos', JSON.stringify(photos));
@@ -411,7 +444,8 @@ const App = (() => {
     try {
       const raw = localStorage.getItem('tracekit_photos');
       if (raw) photos = JSON.parse(raw);
-      const s = localStorage.getItem('tracekit_start'), e = localStorage.getItem('tracekit_end');
+      const s = localStorage.getItem('tracekit_start');
+      const e = localStorage.getItem('tracekit_end');
       if (s) tripStartTime = new Date(s);
       if (e) tripEndTime   = new Date(e);
     } catch (_) { photos = []; }
@@ -433,7 +467,7 @@ const App = (() => {
   function pad(n) { return String(n).padStart(2,'0'); }
   function formatTime(t) {
     if (!t) return '—';
-    return new Date(t).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return new Date(t).toLocaleString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
   }
   function showNotif(icon, title, body) {
     if (notifTimeout) clearTimeout(notifTimeout);
@@ -447,5 +481,11 @@ const App = (() => {
 
   document.addEventListener('DOMContentLoaded', init);
 
-  return { startTrip, endTrip, saveWithName, saveWithoutName, handleFiles, closeModal, savePhoto, selectPhoto, switchTab, searchAddress, pickSuggestion, openLightbox, closeLightbox, viewTrip, closeTripDetail, deleteTrip, renameTrip };
+  return {
+    startTrip, endTrip, saveWithName, saveWithoutName,
+    handleFiles, closeModal, savePhoto, selectPhoto,
+    switchTab, searchAddress, pickSuggestion,
+    openLightbox, closeLightbox,
+    viewTrip, closeTripDetail, deleteTrip, renameTrip
+  };
 })();
