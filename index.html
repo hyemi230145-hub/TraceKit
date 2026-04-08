@@ -26,6 +26,7 @@
     <button class="tab active" id="tabMap"     onclick="App.switchTab('map')">🗺 Map</button>
     <button class="tab"        id="tabGallery" onclick="App.switchTab('gallery')">📷 Gallery</button>
     <button class="tab"        id="tabSummary" onclick="App.switchTab('summary')">🏁 Summary</button>
+    <button class="tab"        id="tabTrips"   onclick="App.switchTab('trips')">📁 My Trips</button>
     <button class="tab"        id="tabPrint"   onclick="App.switchTab('print')">🖨 Print</button>
   </nav>
 
@@ -88,10 +89,40 @@
     </div>
   </div>
 
+  <!-- MY TRIPS VIEW -->
+  <div class="view hidden" id="viewTrips">
+    <div class="trips-wrap">
+      <div class="trips-header">
+        <div class="trips-title">My Trips</div>
+        <div class="trips-sub" id="tripsCount">No saved trips yet</div>
+      </div>
+      <div class="trips-empty" id="tripsEmpty">
+        <div class="trips-empty-icon">✈️</div>
+        <p>Your finished trips will appear here.<br>Start a trip, add photos, then press "End Trip" to save it.</p>
+      </div>
+      <div class="trips-list" id="tripsList"></div>
+    </div>
+  </div>
+
+  <!-- TRIP DETAIL MODAL -->
+  <div class="overlay" id="tripDetailOverlay">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <div>
+          <h2 id="tripDetailTitle">Trip</h2>
+          <div class="trip-detail-date" id="tripDetailDate"></div>
+        </div>
+        <button class="modal-close" onclick="App.closeTripDetail()">✕</button>
+      </div>
+      <div class="trip-detail-stats" id="tripDetailStats"></div>
+      <div class="trip-detail-map-wrap"><div id="tripDetailMap"></div></div>
+      <div class="trip-detail-photos" id="tripDetailPhotos"></div>
+    </div>
+  </div>
+
   <!-- PRINT VIEW -->
   <div class="view hidden" id="viewPrint">
     <div class="print-wrap">
-
       <div class="print-panel">
         <div class="print-panel-header">
           <div>
@@ -100,34 +131,27 @@
           </div>
           <span class="print-sel-count" id="printSelCount">0 / 12 selected</span>
         </div>
-
         <div class="print-sel-grid" id="printSelectGrid">
           <div class="print-empty">No photos yet — upload photos first.</div>
         </div>
-
         <div class="print-actions">
           <div id="printSpinner" class="print-spinner" style="display:none">Generating…</div>
-          <button class="btn-ghost" id="printPreviewBtn" onclick="Printer.updatePreview()">Preview</button>
+          <button class="btn-ghost" onclick="Printer.updatePreview()">Preview</button>
           <button class="btn-outline-accent" id="printPNGBtn" onclick="Printer.downloadPNG()">Download PNG</button>
           <button class="btn-primary" id="printPDFBtn" onclick="Printer.downloadPDF()">Download PDF</button>
         </div>
-
         <div class="print-info-box">
           <strong>📸 Photo kiosk tip</strong><br>
-          Upload the PNG file to any standard 10×15 photo kiosk. Each image is 2.5×5 cm with cut guides — just print and trim!
+          Upload the PNG to any 10×15 photo kiosk. Each image is 2.5×5 cm with cut guides — print and trim!
         </div>
       </div>
-
       <div class="print-preview-panel">
         <div class="print-preview-label">Preview <span style="font-weight:400;opacity:.6">(scaled)</span></div>
         <div class="print-preview-frame">
-          <canvas id="printPreviewCanvas" style="width:100%;height:100%;object-fit:contain;display:block;border-radius:4px"></canvas>
-          <div class="print-preview-placeholder" id="printPreviewPlaceholder">
-            Select photos and click Preview
-          </div>
+          <canvas id="printPreviewCanvas" style="width:100%;height:100%;object-fit:contain;display:block"></canvas>
+          <div class="print-preview-placeholder" id="printPreviewPlaceholder">Select photos and click Preview</div>
         </div>
       </div>
-
     </div>
   </div>
 
@@ -157,7 +181,7 @@
         <input class="form-input" id="modalLocation" type="text" placeholder="e.g. Palais Longchamp" />
       </div>
       <div class="form-field">
-        <label class="form-label">GPS <span class="optional">(auto-filled when you search address)</span></label>
+        <label class="form-label">GPS <span class="optional">(auto-filled when you search)</span></label>
         <div class="coord-row">
           <input class="form-input" id="modalLat" type="number" placeholder="Latitude" step="0.0001" />
           <input class="form-input" id="modalLng" type="number" placeholder="Longitude" step="0.0001" />
@@ -174,6 +198,23 @@
     </div>
   </div>
 
+  <!-- NAME TRIP MODAL -->
+  <div class="overlay" id="nameTripOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Name this trip</h2>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Trip name</label>
+        <input class="form-input" id="tripNameInput" type="text" placeholder="e.g. Paris Spring 2026" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="App.saveWithoutName()">Skip</button>
+        <button class="btn-primary" onclick="App.saveWithName()">Save Trip</button>
+      </div>
+    </div>
+  </div>
+
   <!-- LIGHTBOX -->
   <div class="lightbox" id="lightbox" onclick="App.closeLightbox()">
     <img class="lightbox-img" id="lightboxImg" src="" alt="" />
@@ -186,12 +227,12 @@
     <div><div class="notif-title" id="notifTitle"></div><div class="notif-body" id="notifBody"></div></div>
   </div>
 
-  <!-- PRINT TOAST -->
   <div class="print-toast" id="printToast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/exifr@7.1.3/dist/lite.umd.js"></script>
   <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="trips.js"></script>
   <script src="print.js"></script>
   <script src="app.js"></script>
 </body>
