@@ -143,12 +143,13 @@
         <div class="print-sel-grid" id="printSelectGrid">
           <div class="print-empty">No photos yet — upload photos first.</div>
         </div>
-        <div class="print-actions">
-          <div id="printSpinner" class="print-spinner" style="display:none">Generating…</div>
-          <button class="btn-ghost" onclick="Printer.updatePreview()">Preview</button>
-          <button class="btn-outline-accent" id="printPNGBtn" onclick="Printer.downloadPNG()">Download PNG</button>
-          <button class="btn-primary" id="printPDFBtn" onclick="Printer.downloadPDF()">Download PDF</button>
-        </div>
+       <div class="print-actions">
+  <div id="printSpinner" class="print-spinner" style="display:none">Generating…</div>
+  <button class="btn-ghost" onclick="Printer.updatePreview()">Preview</button>
+  <button class="btn-outline-accent" id="printPNGBtn" onclick="Printer.downloadPNG()">Photos PNG</button>
+  <button class="btn-outline-accent" id="printInfoBtn" onclick="Printer.downloadInfoPNG()">Info PNG</button>
+  <button class="btn-primary" id="printPDFBtn" onclick="Printer.downloadPDF()">Download PDF</button>
+</div>
         <div class="print-info-box">
           <strong>📸 Photo kiosk tip</strong><br>
           Upload the PNG to any 10×15 photo kiosk. Each image is 2.5×5 cm with cut guides — print and trim!
