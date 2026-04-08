@@ -1,4 +1,4 @@
-/* ── TraceKit app.js v3 ── */
+/* ── TraceKit app.js v4 ── */
 const App = (() => {
 
   let photos = [];
@@ -15,6 +15,7 @@ const App = (() => {
 
   let map = null;
   let summaryMap = null;
+  let tripDetailMap = null;
   let routeLine = null;
   let markers = [];
 
@@ -22,8 +23,7 @@ const App = (() => {
   function init() {
     map = L.map('map', { zoomControl: true }).setView([37.5665, 126.9780], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 19,
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19
     }).addTo(map);
 
     const zone = document.getElementById('uploadZone');
@@ -31,33 +31,41 @@ const App = (() => {
     zone.addEventListener('dragleave', () => zone.classList.remove('active'));
     zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('active'); handleFiles(e.dataTransfer.files); });
 
-    loadFromStorage();
+    loadCurrentTrip();
     renderTimeline(); renderMapPins(); renderGallery(); updateMapBadge();
   }
 
   /* ── Tabs ── */
   function switchTab(tab) {
     currentTab = tab;
-    const views = { map: 'viewMap', gallery: 'viewGallery', summary: 'viewSummary', print: 'viewPrint' };
-    const tabs  = { map: 'tabMap',  gallery: 'tabGallery',  summary: 'tabSummary',  print: 'tabPrint' };
+    const views = { map:'viewMap', gallery:'viewGallery', summary:'viewSummary', trips:'viewTrips', print:'viewPrint' };
+    const tabs  = { map:'tabMap',  gallery:'tabGallery',  summary:'tabSummary',  trips:'tabTrips',  print:'tabPrint' };
     Object.keys(views).forEach(t => {
       document.getElementById(views[t]).classList.toggle('hidden', t !== tab);
       document.getElementById(tabs[t]).classList.toggle('active', t === tab);
     });
     if (tab === 'map')     setTimeout(() => map.invalidateSize(), 50);
     if (tab === 'summary') renderSummary();
+    if (tab === 'trips')   renderTripsList();
     if (tab === 'print')   renderPrintPanel();
   }
 
-  /* ── Trip ── */
+  /* ── Trip start ── */
   function startTrip() {
+    // Clear current session for fresh trip
+    photos = [];
     tripActive = true;
     tripSeconds = 0;
     tripStartTime = new Date();
     tripEndTime = null;
+    activeIndex = -1;
+    saveCurrentTrip();
+
     if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
     updateHeaderForActiveTrip();
+    renderTimeline(); renderMapPins(); renderGallery(); updateMapBadge();
     showNotif('🗺️', 'Trip started!', 'You\'ll get a reminder every hour to log a photo.');
+
     timerInterval = setInterval(() => {
       tripSeconds++;
       const h = Math.floor(tripSeconds / 3600), m = Math.floor((tripSeconds % 3600) / 60), s = tripSeconds % 60;
@@ -70,14 +78,46 @@ const App = (() => {
     }, 1000);
   }
 
+  /* ── Trip end — ask for name ── */
   function endTrip() {
     tripActive = false;
     tripEndTime = new Date();
     clearInterval(timerInterval);
     document.getElementById('headerRight').innerHTML = `<button class="btn-primary" onclick="App.startTrip()">Start Trip</button>`;
-    saveToStorage();
-    showNotif('✈️', 'Trip ended!', `${photos.length} photo${photos.length !== 1 ? 's' : ''} recorded.`);
-    switchTab('summary');
+    // Show name modal
+    const suggested = tripStartTime ? tripStartTime.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'My Trip';
+    document.getElementById('tripNameInput').value = suggested;
+    document.getElementById('nameTripOverlay').classList.add('open');
+  }
+
+  function saveWithName() {
+    const name = document.getElementById('tripNameInput').value.trim() || 'My Trip';
+    finalizeTripSave(name);
+  }
+
+  function saveWithoutName() {
+    const name = tripStartTime ? tripStartTime.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'My Trip';
+    finalizeTripSave(name);
+  }
+
+  function finalizeTripSave(name) {
+    document.getElementById('nameTripOverlay').classList.remove('open');
+    if (!photos.length) { showNotif('ℹ️', 'No photos', 'Add photos before ending a trip.'); return; }
+
+    const trip = {
+      id: Date.now(),
+      name,
+      startTime: tripStartTime?.toISOString(),
+      endTime: tripEndTime?.toISOString(),
+      durationMs: tripEndTime - tripStartTime,
+      distance: calcDistance(),
+      photos: JSON.parse(JSON.stringify(photos)), // deep copy
+    };
+
+    TripHistory.saveTrip(trip);
+    saveCurrentTrip();
+    showNotif('✅', 'Trip saved!', `"${name}" has been saved to My Trips.`);
+    switchTab('trips');
   }
 
   function updateHeaderForActiveTrip() {
@@ -142,11 +182,11 @@ const App = (() => {
       if (lat && lng) {
         document.getElementById('modalLat').value = lat.toFixed(6);
         document.getElementById('modalLng').value = lng.toFixed(6);
-        document.getElementById('locationHint').textContent = '📍 GPS found — you can also search an address to override.';
+        document.getElementById('locationHint').textContent = '📍 GPS found — you can also search an address.';
       } else {
         document.getElementById('modalLat').value = '';
         document.getElementById('modalLng').value = '';
-        document.getElementById('locationHint').textContent = '📍 No GPS found — search an address above.';
+        document.getElementById('locationHint').textContent = '📍 No GPS — search an address above.';
       }
       document.getElementById('overlay').classList.add('open');
     };
@@ -166,7 +206,7 @@ const App = (() => {
     if (!lat || !lng || isNaN(lat) || isNaN(lng)) { document.getElementById('locationHint').textContent = '⚠️ Please search an address or enter coordinates.'; return; }
     photos.push({ id: Date.now(), src, time, location, lat, lng, memo });
     photos.sort((a, b) => a.time.localeCompare(b.time));
-    saveToStorage();
+    saveCurrentTrip();
     document.getElementById('overlay').classList.remove('open');
     renderTimeline(); renderMapPins(); renderGallery(); updateMapBadge();
     showNotif('📍', 'Photo saved!', location);
@@ -250,7 +290,7 @@ const App = (() => {
     document.getElementById('statDistance').textContent = calcDistance() + ' km';
     document.getElementById('statPhotos').textContent = photos.length;
     document.getElementById('statPlaces').textContent = photos.length;
-    document.getElementById('summaryDate').textContent = tripStartTime.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    document.getElementById('summaryDate').textContent = tripStartTime?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) ?? '';
     if (!summaryMap) {
       summaryMap = L.map('summaryMap', { zoomControl: false, dragging: false, scrollWheelZoom: false }).setView([photos[0].lat, photos[0].lng], 12);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(summaryMap);
@@ -266,13 +306,115 @@ const App = (() => {
       </div>`).join('');
   }
 
+  /* ── My Trips list ── */
+  function renderTripsList() {
+    const trips = TripHistory.getAll();
+    const empty = document.getElementById('tripsEmpty');
+    const list  = document.getElementById('tripsList');
+    const count = document.getElementById('tripsCount');
+    count.textContent = trips.length ? `${trips.length} trip${trips.length !== 1 ? 's' : ''} saved` : 'No saved trips yet';
+    if (!trips.length) { empty.style.display = 'block'; list.innerHTML = ''; return; }
+    empty.style.display = 'none';
+    list.innerHTML = trips.map(t => {
+      const previewPhotos = t.photos.slice(0, 4);
+      const photoGrid = previewPhotos.map(p => `<div class="trip-card-photo"><img src="${p.src}" alt="${p.location}"/></div>`).join('');
+      const ms = t.durationMs || 0;
+      const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+      const dur = h > 0 ? `${h}h ${m}m` : `${m}m`;
+      const date = t.startTime ? new Date(t.startTime).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }) : '';
+      return `
+        <div class="trip-card" id="tc-${t.id}">
+          <div class="trip-card-top">
+            <div class="trip-card-photos">${photoGrid}</div>
+            <div class="trip-card-info">
+              <div class="trip-card-name">${t.name}</div>
+              <div class="trip-card-date">${date}</div>
+              <div class="trip-card-stats">
+                <div class="trip-stat"><strong>${t.photos.length}</strong> photos</div>
+                <div class="trip-stat"><strong>${t.distance}</strong> km</div>
+                <div class="trip-stat"><strong>${dur}</strong></div>
+              </div>
+            </div>
+          </div>
+          <div class="trip-card-actions">
+            <button class="btn-ghost" style="font-size:12px;padding:5px 12px" onclick="App.viewTrip('${t.id}')">View</button>
+            <input class="trip-rename-input" id="rename-${t.id}" value="${t.name}" placeholder="Rename…" />
+            <button class="btn-ghost" style="font-size:12px;padding:5px 10px" onclick="App.renameTrip('${t.id}')">Rename</button>
+            <span class="spacer"></span>
+            <button class="btn-danger" onclick="App.deleteTrip('${t.id}')">Delete</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function viewTrip(id) {
+    const trip = TripHistory.getAll().find(t => t.id == id);
+    if (!trip) return;
+    document.getElementById('tripDetailTitle').textContent = trip.name;
+    const date = trip.startTime ? new Date(trip.startTime).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }) : '';
+    document.getElementById('tripDetailDate').textContent = date;
+    const ms = trip.durationMs || 0;
+    const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+    document.getElementById('tripDetailStats').innerHTML = `
+      <div class="td-stat"><div class="td-stat-val">${h > 0 ? h+'h '+m+'m' : m+'m'}</div><div class="td-stat-lbl">Duration</div></div>
+      <div class="td-stat"><div class="td-stat-val">${trip.distance} km</div><div class="td-stat-lbl">Distance</div></div>
+      <div class="td-stat"><div class="td-stat-val">${trip.photos.length}</div><div class="td-stat-lbl">Photos</div></div>`;
+    document.getElementById('tripDetailPhotos').innerHTML = trip.photos.map(p => `<div class="td-photo"><img src="${p.src}" alt="${p.location}"/></div>`).join('');
+    document.getElementById('tripDetailOverlay').classList.add('open');
+    // Init detail map
+    setTimeout(() => {
+      if (!tripDetailMap) {
+        tripDetailMap = L.map('tripDetailMap', { zoomControl: false, dragging: true, scrollWheelZoom: false }).setView([trip.photos[0].lat, trip.photos[0].lng], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(tripDetailMap);
+      } else { tripDetailMap.eachLayer(l => { if (!(l instanceof L.TileLayer)) tripDetailMap.removeLayer(l); }); }
+      const line = L.polyline(trip.photos.map(p => [p.lat, p.lng]), { color: '#C8602A', weight: 4, opacity: .85 }).addTo(tripDetailMap);
+      trip.photos.forEach((p, i) => L.circleMarker([p.lat, p.lng], { radius: 6, fillColor: '#C8602A', color: '#fff', weight: 2, fillOpacity: 1 }).addTo(tripDetailMap).bindTooltip(`${i+1}. ${p.location}`));
+      tripDetailMap.invalidateSize();
+      tripDetailMap.fitBounds(line.getBounds(), { padding: [20,20] });
+    }, 150);
+  }
+
+  function closeTripDetail() { document.getElementById('tripDetailOverlay').classList.remove('open'); }
+
+  function deleteTrip(id) {
+    if (!confirm('Delete this trip? This cannot be undone.')) return;
+    TripHistory.deleteTrip(id);
+    renderTripsList();
+    showNotif('🗑️', 'Trip deleted', '');
+  }
+
+  function renameTrip(id) {
+    const val = document.getElementById(`rename-${id}`)?.value.trim();
+    if (!val) return;
+    TripHistory.renameTrip(id, val);
+    renderTripsList();
+    showNotif('✏️', 'Renamed!', val);
+  }
+
   /* ── Print panel ── */
   function renderPrintPanel() {
     const grid = document.getElementById('printSelectGrid');
     if (!photos.length) { grid.innerHTML = '<div class="print-empty">No photos yet — upload photos first.</div>'; document.getElementById('printSelCount').textContent = '0 / 12 selected'; return; }
     Printer.open(photos);
-    // Don't show the modal — just populate the panel
-    document.getElementById('printOverlay') && document.getElementById('printOverlay').classList.remove('open');
+  }
+
+  /* ── Storage (current in-progress trip) ── */
+  function saveCurrentTrip() {
+    try {
+      localStorage.setItem('tracekit_photos', JSON.stringify(photos));
+      if (tripStartTime) localStorage.setItem('tracekit_start', tripStartTime.toISOString());
+      if (tripEndTime)   localStorage.setItem('tracekit_end',   tripEndTime.toISOString());
+    } catch (_) {}
+  }
+
+  function loadCurrentTrip() {
+    try {
+      const raw = localStorage.getItem('tracekit_photos');
+      if (raw) photos = JSON.parse(raw);
+      const s = localStorage.getItem('tracekit_start'), e = localStorage.getItem('tracekit_end');
+      if (s) tripStartTime = new Date(s);
+      if (e) tripEndTime   = new Date(e);
+    } catch (_) { photos = []; }
   }
 
   /* ── Helpers ── */
@@ -302,24 +444,8 @@ const App = (() => {
     el.classList.add('show');
     notifTimeout = setTimeout(() => el.classList.remove('show'), 4500);
   }
-  function saveToStorage() {
-    try {
-      localStorage.setItem('tracekit_photos', JSON.stringify(photos));
-      if (tripStartTime) localStorage.setItem('tracekit_start', tripStartTime.toISOString());
-      if (tripEndTime) localStorage.setItem('tracekit_end', tripEndTime.toISOString());
-    } catch (_) {}
-  }
-  function loadFromStorage() {
-    try {
-      const raw = localStorage.getItem('tracekit_photos');
-      if (raw) photos = JSON.parse(raw);
-      const s = localStorage.getItem('tracekit_start'), e = localStorage.getItem('tracekit_end');
-      if (s) tripStartTime = new Date(s);
-      if (e) tripEndTime = new Date(e);
-    } catch (_) { photos = []; }
-  }
 
   document.addEventListener('DOMContentLoaded', init);
 
-  return { startTrip, endTrip, handleFiles, closeModal, savePhoto, selectPhoto, switchTab, searchAddress, pickSuggestion, openLightbox, closeLightbox };
+  return { startTrip, endTrip, saveWithName, saveWithoutName, handleFiles, closeModal, savePhoto, selectPhoto, switchTab, searchAddress, pickSuggestion, openLightbox, closeLightbox, viewTrip, closeTripDetail, deleteTrip, renameTrip };
 })();
